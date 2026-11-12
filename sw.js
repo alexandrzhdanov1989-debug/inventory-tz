@@ -1,4 +1,4 @@
-const CACHE='inventory-tz-v3-yandex-diagnostic';
+const CACHE='inventory-tz-v4-yandex-direct-download';
 const ASSETS=['./','./index.html','./style.css','./app.js','./manifest.webmanifest','./icon.svg','./yandex-test.html','./yandex-test.js'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(Promise.all([caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('inventory-tz-')&&k!==CACHE).map(k=>caches.delete(k)))),self.clients.claim()])));

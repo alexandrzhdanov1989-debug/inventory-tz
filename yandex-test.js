@@ -6,6 +6,17 @@ const API='https://cloud-api.yandex.net/v1/disk';
 let token=sessionStorage.getItem('tz_yandex_token')||'';
 const $=id=>document.getElementById(id);
 const lines=[];
+let temporaryDownloadUrl='';
+function clearDownloadLink(){temporaryDownloadUrl='';$('openfile').hidden=true;$('openfile').removeAttribute('href');$('filehint').hidden=true;}
+function setDownloadLink(url){
+ // Temporary signed download URL: do not print or copy it in diagnostics.
+ temporaryDownloadUrl=url;
+ $('openfile').href=url;
+ $('openfile').hidden=false;
+ $('filehint').hidden=false;
+ try{log('  Домен скачивания: '+new URL(url).hostname)}catch{}
+ log('  Для проверки откройте ссылку отдельной кнопкой ниже.');
+}
 function log(message){
  const at=new Date().toLocaleTimeString('ru-RU',{hour12:false});
  lines.push(`[${at}] ${message}`);
@@ -55,12 +66,12 @@ $('login').onclick=()=>{
  location.href=u.toString();
 };
 $('logout').onclick=()=>{
- token='';sessionStorage.removeItem('tz_yandex_token');sessionStorage.removeItem('tz_yandex_error');
+ token='';clearDownloadLink();sessionStorage.removeItem('tz_yandex_token');sessionStorage.removeItem('tz_yandex_error');
  setUi();startLog();log('Сессия этого устройства очищена. Токен у Яндекса не отозван.');
 };
 $('test').onclick=async()=>{
  if(!token){log('Сначала войдите через Яндекс.');return;}
- $('test').disabled=true;startLog();
+ $('test').disabled=true;clearDownloadLink();startLog();
  const filename='pwa-diagnostic-'+crypto.randomUUID()+'.json';
  const path='app:/'+filename;
  const payload={test:'TZ_YANDEX_APP_FOLDER',id:crypto.randomUUID(),createdAt:new Date().toISOString()};
@@ -89,12 +100,14 @@ $('test').onclick=async()=>{
   const download=await apiJson(stage,API+'/resources/download?path='+encodeURIComponent(path));
   if(!download.href||!download.href.startsWith('https://'))throw Error(stage+': API не вернул HTTPS-ссылку');
   log('  HTTPS-ссылка получена.');
+  setDownloadLink(download.href);
   stage='6. Скачивание и сверка';log(stage+'…');
-  r=await request(stage,download.href,{},false);
+  r=await request(stage,download.href,{mode:'cors',credentials:'omit',redirect:'follow'},false);
   if(!r.ok)throw Error(stage+': HTTP '+r.status);
   const read=await r.json();
   if(read.id!==payload.id||read.test!==payload.test)throw Error(stage+': содержимое не совпало');
   log('УСПЕХ: тестовый файл записан и прочитан.');
+  log('Прямое открытие файла теперь необязательно.');
   log('Это подтверждает только личную папку приложения, не обмен между ПХ.');
  }catch(e){
   log('ОШИБКА НА ЭТАПЕ «'+stage+'»: '+shortError(e));
@@ -107,5 +120,5 @@ $('copy').onclick=()=>{
  else{const t=document.createElement('textarea');t.value=text;document.body.append(t);t.select();document.execCommand('copy');t.remove();}
 };
 const returnedError=sessionStorage.getItem('tz_yandex_error');
-setUi();
+setUi();clearDownloadLink();
 if(returnedError){startLog();log('Ошибка входа: '+returnedError);sessionStorage.removeItem('tz_yandex_error');}
