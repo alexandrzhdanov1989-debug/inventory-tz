@@ -15,7 +15,7 @@
   const valid = pending && pending.state === state &&
     Date.now() - pending.createdAt < 10 * 60 * 1000 &&
     (!expectedInTab || expectedInTab === state);
-  const dest = valid && pending.destination === 'meta' ? './yandex-meta-test.html?oauth=1' : './yandex-test.html?oauth=1';
+  const dest = valid && pending.destination === 'share' ? './yandex-share-test.html?oauth=1' : (valid && pending.destination === 'meta' ? './yandex-meta-test.html?oauth=1' : './yandex-test.html?oauth=1');
   sessionStorage.removeItem('tz_yandex_expected_state');
   sessionStorage.removeItem('tz_yandex_return_to_meta');
   localStorage.removeItem('tz_yandex_pending');
