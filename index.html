@@ -15,7 +15,9 @@
     sessionStorage.removeItem('tz_yandex_error');
   }else{sessionStorage.setItem('tz_yandex_error',h.get('error_description')||h.get('error')||'Яндекс не вернул токен');}
   sessionStorage.removeItem('tz_yandex_expected_state');
-  location.replace('./yandex-test.html');
+  const returnToMeta=sessionStorage.getItem('tz_yandex_return_to_meta')==='1';
+  sessionStorage.removeItem('tz_yandex_return_to_meta');
+  location.replace(returnToMeta?'./yandex-meta-test.html':'./yandex-test.html');
 })();
 </script>
 <script src="app.js" defer></script></body></html>

@@ -2,6 +2,8 @@
 // Separate diagnostic, uses previously issued OAuth token in the current tab.
 // Does not touch application inventory or send data to any third party.
 const API='https://cloud-api.yandex.net/v1/disk';
+const CLIENT_ID='25b2715eec4b4b2cba466552b2fedfba';
+const REDIRECT='https://alexandrzhdanov1989-debug.github.io/inventory-tz/';
 const token=sessionStorage.getItem('tz_yandex_token')||'';
 const $=id=>document.getElementById(id);
 const lines=[];
@@ -67,5 +69,20 @@ async function run(){
 }
 $('session').textContent=token?'Вход выполнен, токен есть в сессии вкладки.':'Не выполнен вход в этой вкладке.';
 $('run').disabled=!token;
+$('login').hidden=!!token;
+const authorizationError=sessionStorage.getItem('tz_yandex_error');
+if(authorizationError){log('Ошибка авторизации: '+authorizationError);sessionStorage.removeItem('tz_yandex_error');}
 $('run').addEventListener('click',run);
+$('login').addEventListener('click',()=>{
+  const state='tztest-'+crypto.randomUUID();
+  sessionStorage.setItem('tz_yandex_expected_state',state);
+  sessionStorage.setItem('tz_yandex_return_to_meta','1');
+  sessionStorage.removeItem('tz_yandex_error');
+  const u=new URL('https://oauth.yandex.ru/authorize');
+  u.searchParams.set('response_type','token');
+  u.searchParams.set('client_id',CLIENT_ID);
+  u.searchParams.set('redirect_uri',REDIRECT);
+  u.searchParams.set('state',state);
+  location.assign(u.toString());
+});
 $('copy').addEventListener('click',()=>{const content=$('logs').textContent;navigator.clipboard?.writeText(content).catch(()=>{});});
