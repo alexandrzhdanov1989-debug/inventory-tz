@@ -1,13 +1,34 @@
-const CACHE='inventory-tz-v4-yandex-direct-download';
-const ASSETS=['./','./index.html','./style.css','./app.js','./manifest.webmanifest','./icon.svg','./yandex-test.html','./yandex-test.js'];
-self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
-self.addEventListener('activate',e=>e.waitUntil(Promise.all([caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('inventory-tz-')&&k!==CACHE).map(k=>caches.delete(k)))),self.clients.claim()])));
-self.addEventListener('fetch',e=>{
- if(e.request.method!=='GET'||new URL(e.request.url).origin!==self.location.origin)return;
- const url=new URL(e.request.url);
- if(url.pathname.endsWith('/')||url.pathname.endsWith('/index.html')){
-   e.respondWith(fetch(e.request).catch(()=>caches.match('./index.html')));return;
- }
- if(url.pathname.endsWith('/yandex-test.html')||url.pathname.endsWith('/yandex-test.js')){e.respondWith(fetch(e.request).then(r=>{if(r.ok)caches.open(CACHE).then(c=>c.put(e.request,r.clone()));return r}).catch(()=>caches.match(e.request)));return;}
- e.respondWith(caches.match(e.request).then(hit=>hit||fetch(e.request).then(r=>{if(r.ok)caches.open(CACHE).then(c=>c.put(e.request,r.clone()));return r})));
+// v6: network-first for pages and diagnostics, cache-first for stable offline assets.
+// OAuth and Yandex API are on other origins and never intercepted.
+const CACHE='inventory-tz-v6-oauth-navigation';
+const STATIC=['./','./index.html','./app.js','./style.css','./manifest.webmanifest','./icon.svg'];
+self.addEventListener('install',e=>e.waitUntil(
+  caches.open(CACHE).then(c=>c.addAll(STATIC)).then(()=>self.skipWaiting())
+));
+self.addEventListener('activate',e=>e.waitUntil((async()=>{
+  for(const name of await caches.keys())if(name.startsWith('inventory-tz-')&&name!==CACHE)await caches.delete(name);
+  await self.clients.claim();
+})()));
+self.addEventListener('fetch',event=>{
+  const req=event.request;
+  if(req.method!=='GET'||new URL(req.url).origin!==self.location.origin)return;
+  const url=new URL(req.url);
+  const dynamic=req.mode==='navigate'||/\/(?:index|yandex-test|yandex-meta-test)\.(?:html|js)$/.test(url.pathname)||url.pathname.endsWith('/');
+  event.respondWith((async()=>{
+    const cache=await caches.open(CACHE);
+    if(!dynamic){const hit=await cache.match(req,{ignoreSearch:true});if(hit)return hit;}
+    try{
+      const response=await fetch(req);
+      if(response.ok&&response.type==='basic'){
+        const copy=response.clone();
+        event.waitUntil(cache.put(req,copy).catch(()=>{}));
+      }
+      return response;
+    }catch(e){
+      const hit=await cache.match(req,{ignoreSearch:true});
+      if(hit)return hit;
+      if(req.mode==='navigate'){const home=await cache.match('./index.html');if(home)return home;}
+      throw e;
+    }
+  })());
 });

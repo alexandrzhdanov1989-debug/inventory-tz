@@ -57,6 +57,7 @@ async function apiJson(stage,url,options={}){
 $('login').onclick=()=>{
  const state='tztest-'+crypto.randomUUID();
  sessionStorage.setItem('tz_yandex_expected_state',state);
+ localStorage.setItem('tz_yandex_pending',JSON.stringify({state,destination:'old',createdAt:Date.now()}));
  sessionStorage.removeItem('tz_yandex_error');
  const u=new URL('https://oauth.yandex.ru/authorize');
  u.searchParams.set('response_type','token');

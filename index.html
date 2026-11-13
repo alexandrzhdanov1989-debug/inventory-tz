@@ -1,23 +1,34 @@
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#0b2038"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="Инвентаризация"><meta name="description" content="Офлайн-инвентаризация техники и оборудования"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon.svg"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css"><title>Инвентаризация ТЗ</title></head><body>
 <div id="app"><div class="loading">Загрузка локальной базы…</div></div>
 <script>
-// Only intercept the OAuth callback for the isolated Yandex connection test.
-(function(){
-  const h=new URLSearchParams(location.hash.slice(1));
-  const state=h.get('state')||'';
-  if(!state.startsWith('tztest-')) return;
-  const expected=sessionStorage.getItem('tz_yandex_expected_state');
-  // Remove tokens from the browser address before touching any other app code.
-  history.replaceState(null,'',location.pathname+location.search);
-  if(state!==expected){sessionStorage.setItem('tz_yandex_error','Несовпадение state. Повторите вход.');}
-  else if(h.get('access_token')){
-    sessionStorage.setItem('tz_yandex_token',h.get('access_token'));
-    sessionStorage.removeItem('tz_yandex_error');
-  }else{sessionStorage.setItem('tz_yandex_error',h.get('error_description')||h.get('error')||'Яндекс не вернул токен');}
+// Yandex OAuth callback: the registered redirect URI is the project root.
+// No inventory records are read or changed here.
+(function () {
+  const fragment = new URLSearchParams(location.hash.substring(1));
+  const state = fragment.get('state') || '';
+  if (!state.startsWith('tztest-')) return;
+  // Drop token from URL before any application scripts execute.
+  history.replaceState(null, '', location.pathname + location.search);
+  let pending = null;
+  try { pending = JSON.parse(localStorage.getItem('tz_yandex_pending') || 'null'); } catch (_) {}
+  const expectedInTab = sessionStorage.getItem('tz_yandex_expected_state');
+  const valid = pending && pending.state === state &&
+    Date.now() - pending.createdAt < 10 * 60 * 1000 &&
+    (!expectedInTab || expectedInTab === state);
+  const dest = valid && pending.destination === 'meta' ? './yandex-meta-test.html?oauth=1' : './yandex-test.html?oauth=1';
   sessionStorage.removeItem('tz_yandex_expected_state');
-  const returnToMeta=sessionStorage.getItem('tz_yandex_return_to_meta')==='1';
   sessionStorage.removeItem('tz_yandex_return_to_meta');
-  location.replace(returnToMeta?'./yandex-meta-test.html':'./yandex-test.html');
+  localStorage.removeItem('tz_yandex_pending');
+  if (!valid) {
+    sessionStorage.setItem('tz_yandex_error', 'Сессия входа устарела или state не совпал. Повторите вход с тестовой страницы.');
+  } else if (fragment.get('access_token')) {
+    sessionStorage.setItem('tz_yandex_token', fragment.get('access_token'));
+    sessionStorage.removeItem('tz_yandex_error');
+  } else {
+    sessionStorage.setItem('tz_yandex_error', 'Яндекс не выдал токен: ' + (fragment.get('error') || 'неизвестная ошибка'));
+  }
+  location.replace(dest);
 })();
 </script>
+<p style="margin:8px 16px;font-size:13px"><a href="./yandex-meta-test.html">Проверка чтения через метаданные Яндекса</a></p>
 <script src="app.js" defer></script></body></html>

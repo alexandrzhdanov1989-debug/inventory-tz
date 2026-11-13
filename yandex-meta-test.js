@@ -26,7 +26,7 @@ function b64url(text){const bytes=new TextEncoder().encode(text);let binary='';f
 function from64url(s){const str=atob(s.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-s.length%4)%4));return new TextDecoder().decode(Uint8Array.from(str,c=>c.charCodeAt(0)))}
 async function run(){
  lines.length=0;$('logs').textContent='';$('run').disabled=true;
- if(!token){log('Нет OAuth-сессии. Сначала выполните вход на yandex-test.html в этой же вкладке.');$('run').disabled=false;return}
+ if(!token){log('Нет OAuth-сессии. Нажмите «Войти через Яндекс» на этой странице.');$('run').disabled=false;return}
  const obj={t:'TZ_META_TEST',id:crypto.randomUUID().slice(0,8),px:'LB',n:1};
  const payload=JSON.stringify(obj);
  const basename='evt_'+b64url(payload)+'.json';
@@ -76,6 +76,7 @@ $('run').addEventListener('click',run);
 $('login').addEventListener('click',()=>{
   const state='tztest-'+crypto.randomUUID();
   sessionStorage.setItem('tz_yandex_expected_state',state);
+  localStorage.setItem('tz_yandex_pending', JSON.stringify({state, destination:'meta', createdAt:Date.now()}));
   sessionStorage.setItem('tz_yandex_return_to_meta','1');
   sessionStorage.removeItem('tz_yandex_error');
   const u=new URL('https://oauth.yandex.ru/authorize');
