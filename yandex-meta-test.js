@@ -87,3 +87,49 @@ $('login').addEventListener('click',()=>{
   location.assign(u.toString());
 });
 $('copy').addEventListener('click',()=>{const content=$('logs').textContent;navigator.clipboard?.writeText(content).catch(()=>{});});
+
+// Separate byte-size experiment. No real inventory information is accessed.
+async function testPropertySizes() {
+  const button=$('sizeTest');
+  if (!token) {log('Сначала войдите через Яндекс.'); return;}
+  button.disabled=true; $('run').disabled=true;
+  lines.length=0; $('logs').textContent='';
+  const id=crypto.randomUUID();
+  const path='app:/size_probe_'+id+'.json';
+  log('Тест размера метаданных. Все данные искусственные.');
+  log('Создаём ОДИН тестовый файл в app:/, затем последовательно заменяем его свойства.');
+  try {
+    const link=await jsonRequest('Получение адреса загрузки',API+'/resources/upload?'+new URLSearchParams({path,overwrite:'false'}));
+    if(!link.href || !link.href.startsWith('https://')) throw Error('Ссылка на загрузку отсутствует');
+    const upload=await fetch(link.href,{method:'PUT',body:new Blob(['{"test":"size_probe"}'],{type:'application/json'}),cache:'no-store'});
+    log('  Создание тестового файла: HTTP '+upload.status);
+    if(!upload.ok)throw Error('Не удалось создать тестовый файл');
+    const encoder=new TextEncoder();
+    const sizes=[256,512,768,900,1024,2048,4096];
+    let lastOK=0;
+    for(const bytes of sizes) {
+      // All ASCII; JSON payload is precisely the requested number of UTF-8 bytes.
+      const prefix=JSON.stringify({test:'size',id,content:''});
+      const padLen=bytes-encoder.encode(prefix).length;
+      if(padLen<0) throw Error('Размер меньше служебного заголовка');
+      const payload=JSON.stringify({test:'size',id,content:'X'.repeat(padLen)});
+      const actual=encoder.encode(payload).length;
+      log('Размер JSON: '+actual+' байт; PATCH + GET:');
+      try {
+        await jsonRequest('  PATCH свойств',url(path),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({custom_properties:{tz_probe:payload}})});
+        const got=await jsonRequest('  GET свойств',url(path));
+        if(got.custom_properties?.tz_probe!==payload)throw Error('Полученное значение отличается от записанного');
+        lastOK=actual;log('  УСПЕХ: '+actual+' байт записано и прочитано без скачивания.');
+      }catch(e) {
+        log('  НЕУДАЧА: '+err(e));
+        log('Тест остановлен на '+actual+' байт. Последний успешный размер: '+lastOK+' байт.');
+        break;
+      }
+    }
+    log('Итог: подтверждённый объём JSON — '+lastOK+' байт.');
+    log('Тестовый файл остаётся в app:/, реальные данные не затронуты.');
+  }catch(e){log('ОШИБКА ТЕСТА: '+err(e))}
+  finally{button.disabled=false;$('run').disabled=false;}
+}
+$('sizeTest').disabled=!token;
+$('sizeTest').addEventListener('click',testPropertySizes);
