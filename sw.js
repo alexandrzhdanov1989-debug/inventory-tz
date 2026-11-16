@@ -1,34 +1,52 @@
-// v6: network-first for pages and diagnostics, cache-first for stable offline assets.
-// OAuth and Yandex API are on other origins and never intercepted.
-const CACHE='inventory-tz-v6-oauth-navigation';
-const STATIC=['./','./index.html','./app.js','./style.css','./manifest.webmanifest','./icon.svg'];
-self.addEventListener('install',e=>e.waitUntil(
-  caches.open(CACHE).then(c=>c.addAll(STATIC)).then(()=>self.skipWaiting())
-));
-self.addEventListener('activate',e=>e.waitUntil((async()=>{
-  for(const name of await caches.keys())if(name.startsWith('inventory-tz-')&&name!==CACHE)await caches.delete(name);
-  await self.clients.claim();
-})()));
-self.addEventListener('fetch',event=>{
-  const req=event.request;
-  if(req.method!=='GET'||new URL(req.url).origin!==self.location.origin)return;
-  const url=new URL(req.url);
-  const dynamic=req.mode==='navigate'||/\/(?:index|yandex-test|yandex-meta-test)\.(?:html|js)$/.test(url.pathname)||url.pathname.endsWith('/');
-  event.respondWith((async()=>{
-    const cache=await caches.open(CACHE);
-    if(!dynamic){const hit=await cache.match(req,{ignoreSearch:true});if(hit)return hit;}
-    try{
-      const response=await fetch(req);
-      if(response.ok&&response.type==='basic'){
-        const copy=response.clone();
-        event.waitUntil(cache.put(req,copy).catch(()=>{}));
+// Реестр ТЗ: офлайн-оболочка только для инвентаризации.
+// Данные техники хранятся отдельно в IndexedDB и не удаляются при обновлении.
+const CACHE = 'inventory-tz-clean-v7';
+const FILES = ['./', './index.html', './app.js', './style.css', './manifest.webmanifest', './icon.svg'];
+const PREFIXES = ['inventory-tz-', 'inventory-tz-clean-'];
+
+self.addEventListener('install', event => {
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
+    await cache.addAll(FILES);
+    await self.skipWaiting();
+  })());
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil((async () => {
+    const names = await caches.keys();
+    await Promise.all(names.filter(name => name !== CACHE && PREFIXES.some(p => name.startsWith(p)))
+      .map(name => caches.delete(name)));
+    await self.clients.claim();
+  })());
+});
+
+self.addEventListener('fetch', event => {
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
+  // Не обслуживаем диагностические страницы, даже если они остались на GitHub.
+  if (/^yandex(?:-|\.)/.test(url.pathname.split('/').pop())) return;
+
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    // При наличии интернета берём свежую версию, офлайн — кэшированную.
+    try {
+      const response = await fetch(req);
+      if (response.ok && response.type === 'basic') {
+        const copy = response.clone(); // клонировать ДО возврата ответа браузеру
+        event.waitUntil(cache.put(req, copy).catch(() => {}));
       }
       return response;
-    }catch(e){
-      const hit=await cache.match(req,{ignoreSearch:true});
-      if(hit)return hit;
-      if(req.mode==='navigate'){const home=await cache.match('./index.html');if(home)return home;}
-      throw e;
+    } catch (error) {
+      const saved = await cache.match(req, {ignoreSearch: true});
+      if (saved) return saved;
+      if (req.mode === 'navigate') {
+        const home = await cache.match('./index.html');
+        if (home) return home;
+      }
+      throw error;
     }
   })());
 });
